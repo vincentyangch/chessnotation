@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2 } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -15,6 +15,11 @@ type AnalysisResult = {
   };
 };
 
+type ParsedMove = {
+  move: string;
+  box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] scaled 0-1000
+};
+
 export default function AnalysisBoard() {
   const [game, setGame] = useState(new Chess());
   const [currentPosition, setCurrentPosition] = useState(game.fen());
@@ -23,6 +28,14 @@ export default function AnalysisBoard() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Parsing state
+  const [parsedMoves, setParsedMoves] = useState<ParsedMove[]>([]);
+  const [currentParsedIndex, setCurrentParsedIndex] = useState(0);
+  const [isParsingImage, setIsParsingImage] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [showImagePanel, setShowImagePanel] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const boardWrapperRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(400);
@@ -92,6 +105,13 @@ export default function AnalysisBoard() {
         setCurrentPosition(gameCopy.fen());
         setHistory(gameCopy.history({ verbose: true }) as Move[]);
         setAnalysis(null);
+
+        // If we are in review mode and this manual move matches or we just want to advance
+        // We will advance the parsed index automatically.
+        if (parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length) {
+          setCurrentParsedIndex(prev => prev + 1);
+        }
+
         return true;
       }
     } catch (e) {
@@ -134,6 +154,9 @@ export default function AnalysisBoard() {
     setCurrentPosition(newGame.fen());
     setHistory([]);
     setAnalysis(null);
+    setParsedMoves([]);
+    setCurrentParsedIndex(0);
+    setUploadedImage(null);
   }
 
   function exportPgn() {
@@ -200,6 +223,96 @@ export default function AnalysisBoard() {
 
   const whiteHeight = `${evalPercentage}%`;
 
+  // Parsing logic
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingImage(true);
+    setErrorMsg("");
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+
+        const res = await fetch('/api/parse-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64data, mimeType: file.type })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.moves && Array.isArray(data.moves)) {
+            setParsedMoves(data.moves);
+            setCurrentParsedIndex(0);
+            setUploadedImage(base64data);
+            setShowImagePanel(true);
+            if (data.moves.length === 0) {
+              setErrorMsg("No moves found in the image.");
+            }
+          } else {
+            setErrorMsg("Failed to parse moves from the image.");
+          }
+        } else {
+          const errData = await res.json();
+          setErrorMsg(errData.error || "Failed to parse image.");
+        }
+        setIsParsingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (e) {
+      setErrorMsg("Error uploading image.");
+      setIsParsingImage(false);
+    }
+
+    // reset input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const acceptParsedMove = () => {
+    if (currentParsedIndex < parsedMoves.length) {
+      const parsed = parsedMoves[currentParsedIndex];
+      const move = parsed.move;
+
+      const gameCopy = new Chess();
+      gameCopy.loadPgn(game.pgn());
+      try {
+        const result = gameCopy.move(move);
+        if (result) {
+          setGame(gameCopy);
+          setCurrentPosition(gameCopy.fen());
+          setHistory(gameCopy.history({ verbose: true }) as Move[]);
+          setAnalysis(null);
+          setCurrentParsedIndex(prev => prev + 1);
+        } else {
+          setErrorMsg(`Failed to play move: ${move}. Please make the move manually.`);
+        }
+      } catch (e) {
+        setErrorMsg(`Invalid move generated: ${move}. Please make the move manually.`);
+      }
+    }
+  };
+
+  const skipParsedMove = () => {
+    if (currentParsedIndex < parsedMoves.length) {
+      setCurrentParsedIndex(prev => prev + 1);
+    }
+  };
+
+  const revertParsedMove = () => {
+    if (currentParsedIndex > 0) {
+      setCurrentParsedIndex(prev => prev - 1);
+    }
+  };
+
+  const cancelParsedReview = () => {
+    setParsedMoves([]);
+    setCurrentParsedIndex(0);
+    setUploadedImage(null);
+  };
+
   const arrowOptions = analysis?.bestMove ? [
     {
       startSquare: analysis.bestMove.substring(0, 2),
@@ -210,9 +323,30 @@ export default function AnalysisBoard() {
 
   if (!isMounted) return <div className="animate-pulse bg-slate-800 rounded-xl h-[600px] w-full" />;
 
+  // Compute bounding box style for the current parsed move
+  let activeBoxStyle = {};
+  if (uploadedImage && showImagePanel && parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length) {
+    const box = parsedMoves[currentParsedIndex].box;
+    if (box && box.length === 4) {
+      const [ymin, xmin, ymax, xmax] = box; // 0-1000 scaled format
+      const paddingY = 1.0; // 1% vertical padding
+      const paddingX = 2.0; // 2% horizontal padding
+      const top = Math.max(0, (ymin / 1000) * 100 - paddingY);
+      const left = Math.max(0, (xmin / 1000) * 100 - paddingX);
+      const height = ((ymax - ymin) / 1000) * 100 + (paddingY * 2);
+      const width = ((xmax - xmin) / 1000) * 100 + (paddingX * 2);
+      activeBoxStyle = {
+        top: `${top}%`,
+        left: `${left}%`,
+        height: `${height}%`,
+        width: `${width}%`,
+      };
+    }
+  }
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      <div className="lg:col-span-2 flex justify-center w-full relative">
+    <div className={`grid grid-cols-1 ${uploadedImage && showImagePanel ? 'xl:grid-cols-4 lg:grid-cols-3' : 'lg:grid-cols-3'} gap-6 items-start transition-all duration-300`}>
+      <div className={`${uploadedImage && showImagePanel ? 'xl:col-span-2 lg:col-span-1' : 'lg:col-span-2'} flex justify-center w-full relative`}>
         <div className="flex gap-4 w-full max-w-2xl px-2">
 
           {/* Evaluation Bar */}
@@ -266,13 +400,86 @@ export default function AnalysisBoard() {
           >
             <RotateCcw size={16} /> Reset
           </button>
+          <div className="flex-1" />
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          {uploadedImage && (
+            <button
+              onClick={() => setShowImagePanel(!showImagePanel)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-md hover:bg-slate-700 transition text-sm font-medium mr-2"
+              title={showImagePanel ? "Hide photo panel" : "Show photo panel"}
+            >
+              {showImagePanel ? <ImageOff size={16} className="text-slate-400" /> : <ImageIcon size={16} className="text-indigo-400" />}
+            </button>
+          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isParsingImage}
+            className="flex items-center gap-2 px-3 py-2 bg-amber-600/20 text-amber-500 border border-amber-600/30 rounded-md hover:bg-amber-600/30 transition text-sm font-medium mr-2"
+          >
+            {isParsingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            {isParsingImage ? "Parsing..." : "Upload Photo"}
+          </button>
           <button
             onClick={exportPgn}
-            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium ml-auto shadow-md shadow-indigo-900/50"
+            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium shadow-md shadow-indigo-900/50"
           >
             <Download size={16} /> Export
           </button>
         </div>
+
+        {/* Review Mode Panel */}
+        {parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length && (
+          <div className="p-4 bg-amber-900/20 border-b border-amber-500/20">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-2 text-amber-500 font-semibold tracking-wide text-sm uppercase">
+                <SquareTerminal size={16} />
+                <span>Review Notation</span>
+              </div>
+              <button onClick={cancelParsedReview} className="text-slate-500 hover:text-slate-300">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col items-center justify-center p-4 bg-slate-800 rounded-lg border border-amber-500/30">
+              <div className="text-sm text-slate-400 mb-1">
+                Move {Math.floor(currentParsedIndex / 2) + 1}
+                {currentParsedIndex % 2 === 0 ? " (White)" : " (Black)"}
+              </div>
+              <div className="text-2xl font-bold text-white mb-4">
+                {parsedMoves[currentParsedIndex]?.move}
+              </div>
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={revertParsedMove}
+                  disabled={currentParsedIndex === 0}
+                  className="flex-1 flex justify-center items-center gap-2 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Undo2 size={18} /> Prev
+                </button>
+                <button
+                  onClick={acceptParsedMove}
+                  className="flex-[2] flex justify-center items-center gap-2 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-500 transition font-medium"
+                >
+                  <Check size={18} /> Accept
+                </button>
+                <button
+                  onClick={skipParsedMove}
+                  className="flex-1 flex justify-center items-center gap-2 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600 transition font-medium"
+                >
+                  <SkipForward size={18} /> Skip
+                </button>
+              </div>
+              <div className="text-xs text-slate-500 mt-3 text-center">
+                Or make the correct move manually on the board.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Engine output */}
         <div className="p-4 bg-slate-900 border-b border-slate-700">
@@ -325,6 +532,35 @@ export default function AnalysisBoard() {
           )}
         </div>
       </div>
+
+      {/* Image Display Panel */}
+      {uploadedImage && showImagePanel && (
+        <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl sticky top-8 xl:col-span-1 lg:col-span-1 h-[max(600px,calc(100vh-8rem))]">
+          <div className="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center">
+            <h3 className="font-semibold text-slate-200">Notation Sheet</h3>
+            <span className="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded">
+              {parsedMoves.length} moves parsed
+            </span>
+          </div>
+          <div className="flex-1 relative overflow-auto p-4 flex items-start justify-center">
+            <div className="relative inline-block max-w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={uploadedImage}
+                alt="Notation Sheet"
+                className="max-w-full h-auto rounded-md object-contain border border-slate-600"
+              />
+              {/* Bounding Box Highlight */}
+              {currentParsedIndex < parsedMoves.length && (
+                <div
+                  className="absolute border-2 border-red-500 bg-red-500/20 rounded shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all duration-300 z-10"
+                  style={activeBoxStyle}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
