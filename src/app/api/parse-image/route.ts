@@ -30,7 +30,8 @@ Follow these exact rules:
 4. Return ONLY a valid JSON array of objects in order. Each object must have a "move" string and a "box" array of exactly 4 numbers [ymin, xmin, ymax, xmax].
    - ymin, xmin, ymax, xmax should be mapped between 0 and 1000 representing the bounding box coordinates proportional to the image dimensions.
    Example: [{"move": "e4", "box": [120, 150, 150, 250]}, {"move": "e5", "box": [120, 350, 150, 450]}]
-5. Do NOT wrap it in markdown block quotes like \`\`\`json. Just the raw JSON.`;
+5. Do NOT wrap it in markdown block quotes like \`\`\`json. Just the raw JSON.
+6. Ensure absolutely perfect JSON syntax. Do NOT use double-double quotes like \`""move"\`!`;
 
         // The imageBase64 might come with a data URI prefix, we'll assume it's stripped by the frontend or 
         // we'll strip it here if present. Let's make sure it's clean base64.
@@ -56,7 +57,10 @@ Follow these exact rules:
         const responseText = response.text || "";
 
         // Clean up the response in case it returned markdown JSON tags anyway
-        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        let cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        // Edge case: sometimes Gemini accidentally writes {""move": "..."} causing parser failures
+        cleanedText = cleanedText.replace(/""/g, '"');
 
         try {
             const parsedMoves = JSON.parse(cleanedText);

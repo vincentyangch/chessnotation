@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -28,6 +28,18 @@ export default function AnalysisBoard() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Debug mode state
+  const [debugLogs, setDebugLogs] = useState<{ time: string, message: string, type: 'info' | 'error' }[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+
+  const addLog = (message: string, type: 'info' | 'error' = 'info') => {
+    setDebugLogs(prev => [...prev, {
+      time: new Date().toLocaleTimeString(),
+      message,
+      type
+    }]);
+  };
 
   // Parsing state
   const [parsedMoves, setParsedMoves] = useState<ParsedMove[]>([]);
@@ -59,6 +71,7 @@ export default function AnalysisBoard() {
       setIsAnalyzing(true);
       setErrorMsg("");
       try {
+        addLog(`Fetching analysis for FEN: ${fen}`);
         const res = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -66,15 +79,18 @@ export default function AnalysisBoard() {
         });
         if (res.ok) {
           const data = await res.json();
+          addLog(`Analysis successful. Evaluation: ${data.evaluation.comment}`);
           // Ensure we are setting analysis for the current fen (ignore race conditions)
           if (data.evaluation.fen === fen) {
             setAnalysis(data);
           }
         } else {
           setErrorMsg("Analysis failed.");
+          addLog(`Analysis completely failed. HTTP ${res.status}`, 'error');
         }
-      } catch (e) {
+      } catch (e: any) {
         setErrorMsg("Failed to connect to engine.");
+        addLog(`Engine connection exception: ${e.message}`, 'error');
       } finally {
         setIsAnalyzing(false);
       }
@@ -105,12 +121,6 @@ export default function AnalysisBoard() {
         setCurrentPosition(gameCopy.fen());
         setHistory(gameCopy.history({ verbose: true }) as Move[]);
         setAnalysis(null);
-
-        // If we are in review mode and this manual move matches or we just want to advance
-        // We will advance the parsed index automatically.
-        if (parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length) {
-          setCurrentParsedIndex(prev => prev + 1);
-        }
 
         return true;
       }
@@ -232,10 +242,12 @@ export default function AnalysisBoard() {
     setErrorMsg("");
 
     try {
+      addLog(`Reading file: ${file.name} (${file.size} bytes)`);
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64data = reader.result as string;
 
+        addLog(`Sending image to Gemini parsing API...`);
         const res = await fetch('/api/parse-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -245,25 +257,30 @@ export default function AnalysisBoard() {
         if (res.ok) {
           const data = await res.json();
           if (data.moves && Array.isArray(data.moves)) {
+            addLog(`Successfully parsed ${data.moves.length} moves.`);
             setParsedMoves(data.moves);
             setCurrentParsedIndex(0);
             setUploadedImage(base64data);
             setShowImagePanel(true);
             if (data.moves.length === 0) {
               setErrorMsg("No moves found in the image.");
+              addLog("Gemini returned successfully but found 0 moves.", 'info');
             }
           } else {
             setErrorMsg("Failed to parse moves from the image.");
+            addLog(`Incorrect JSON payload structure returned from API.`, 'error');
           }
         } else {
           const errData = await res.json();
           setErrorMsg(errData.error || "Failed to parse image.");
+          addLog(`API error during parse: ${errData.error || res.statusText}`, 'error');
         }
         setIsParsingImage(false);
       };
       reader.readAsDataURL(file);
-    } catch (e) {
+    } catch (e: any) {
       setErrorMsg("Error uploading image.");
+      addLog(`File upload/parse exception: ${e.message}`, 'error');
       setIsParsingImage(false);
     }
 
@@ -418,6 +435,13 @@ export default function AnalysisBoard() {
             </button>
           )}
           <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-md hover:bg-slate-700 transition text-sm font-medium mr-2"
+            title="Toggle Debug Console"
+          >
+            <Bug size={16} className={showDebug ? "text-emerald-400" : "text-slate-400"} />
+          </button>
+          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isParsingImage}
             className="flex items-center gap-2 px-3 py-2 bg-amber-600/20 text-amber-500 border border-amber-600/30 rounded-md hover:bg-amber-600/30 transition text-sm font-medium mr-2"
@@ -503,34 +527,54 @@ export default function AnalysisBoard() {
           </div>
         </div>
 
-        {/* Moves history */}
-        <div className="flex-1 p-4 overflow-y-auto min-h-[300px] max-h-[400px]">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Move History</h3>
-          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm leading-relaxed">
-            {history.reduce((result: any[], move: Move, index: number) => {
-              if (index % 2 === 0) {
-                result.push([move]);
-              } else {
-                result[result.length - 1].push(move);
-              }
-              return result;
-            }, []).map((movePair: Move[], i: number) => (
-              <div key={i} className="contents">
-                <div className="text-slate-500 text-right select-none w-8">{(i + 1)}.</div>
-                <div className="flex gap-4">
-                  <span className="w-16 text-slate-200">{movePair[0].san}</span>
-                  {movePair[1] && <span className="w-16 text-slate-200">{movePair[1].san}</span>}
-                </div>
-              </div>
-            ))}
+        {/* Debug Console */}
+        {showDebug ? (
+          <div className="flex-1 p-4 bg-slate-950 overflow-y-auto max-h-[400px] border-t border-slate-700 font-mono text-xs">
+            <h3 className="font-semibold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <Bug size={14} /> Debug Console
+            </h3>
+            {debugLogs.length === 0 ? (
+              <span className="text-slate-600">No logs yet...</span>
+            ) : (
+              <ul className="space-y-1">
+                {debugLogs.map((log, i) => (
+                  <li key={i} className={`flex gap-3 py-1 border-b border-white/5 ${log.type === 'error' ? 'text-red-400 bg-red-950/20' : 'text-slate-300'}`}>
+                    <span className="text-slate-500 shrink-0 w-16">{log.time}</span>
+                    <span className="break-words">{log.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          {history.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-3 mt-12">
-              <Play size={24} className="opacity-50" />
-              <p className="text-sm">Make a move to start</p>
+        ) : (
+          <div className="flex-1 p-4 overflow-y-auto min-h-[300px] max-h-[400px]">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Move History</h3>
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm leading-relaxed">
+              {history.reduce((result: any[], move: Move, index: number) => {
+                if (index % 2 === 0) {
+                  result.push([move]);
+                } else {
+                  result[result.length - 1].push(move);
+                }
+                return result;
+              }, []).map((movePair: Move[], i: number) => (
+                <div key={i} className="contents">
+                  <div className="text-slate-500 text-right select-none w-8">{(i + 1)}.</div>
+                  <div className="flex gap-4">
+                    <span className="w-16 text-slate-200">{movePair[0].san}</span>
+                    {movePair[1] && <span className="w-16 text-slate-200">{movePair[1].san}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+            {history.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-3 mt-12">
+                <Play size={24} className="opacity-50" />
+                <p className="text-sm">Make a move to start</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Image Display Panel */}
