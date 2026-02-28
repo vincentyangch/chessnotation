@@ -11,6 +11,7 @@ export type AppSettings = {
   fastMode: boolean;
   stockfishDepth: number;
   stockfishEnabled: boolean;
+  lichessToken: string;
 };
 
 export const defaultSettings: AppSettings = {
@@ -18,7 +19,8 @@ export const defaultSettings: AppSettings = {
   geminiModel: "gemini-3-flash-preview",
   fastMode: false,
   stockfishDepth: 10,
-  stockfishEnabled: true
+  stockfishEnabled: true,
+  lichessToken: ""
 };
 
 export default function Home() {
@@ -159,6 +161,25 @@ export default function Home() {
                     <span>Accurate (20)</span>
                   </div>
                 </div>
+                {/* Lichess Settings */}
+                <div className="space-y-4 pt-4 border-t border-slate-700/50">
+                  <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider">Lichess Integrations</h3>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-300 font-medium">Personal API Token</label>
+                    <input
+                      type="password"
+                      value={settings.lichessToken}
+                      onChange={(e) => setSettings({ ...settings, lichessToken: e.target.value })}
+                      placeholder="lip_..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
+                    />
+                    <div className="text-xs text-slate-500">
+                      Required to export games directly to your studies. Generate one at <a href="https://lichess.org/account/oauth/token" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">lichess.org/account/oauth/token</a> with &quot;Read/Write studies&quot; permissions.
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
             </div>

@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Chess, Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Upload, Loader2, Camera, Trash2, Copy, ExternalLink, Image as ImageIcon, ImageOff } from "lucide-react";
+import { Upload, Loader2, Camera, Trash2, Copy, Image as ImageIcon, ImageOff, BookOpen } from "lucide-react";
 import { AppSettings } from "@/app/page";
+import LichessExportModal from "./LichessExportModal";
 
 export default function BoardScanner({ settings }: { settings: AppSettings }) {
     const [game, setGame] = useState(new Chess());
@@ -20,6 +21,7 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
 
     const boardWrapperRef = useRef<HTMLDivElement>(null);
     const [boardWidth, setBoardWidth] = useState(400);
+    const [showLichessModal, setShowLichessModal] = useState(false);
 
     type Tool = { color: 'w' | 'b', type: 'p' | 'n' | 'b' | 'r' | 'q' | 'k' } | 'trash' | null;
     const [activeTool, setActiveTool] = useState<Tool>(null);
@@ -192,12 +194,6 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
         });
     }
 
-    function exportToLichess() {
-        const formattedFen = currentPosition.replace(/ /g, '_');
-        const url = `https://lichess.org/editor/${formattedFen}?color=white`;
-        window.open(url, "_blank");
-    }
-
     const renderPieceBtn = (color: 'w' | 'b', type: 'p' | 'n' | 'b' | 'r' | 'q' | 'k', icon: string) => {
         const isActive = activeTool !== 'trash' && activeTool?.color === color && activeTool?.type === type;
         return (
@@ -351,14 +347,32 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
                             <Copy size={16} /> Copy FEN
                         </button>
                         <button
-                            onClick={exportToLichess}
-                            className="flex-1 flex justify-center items-center gap-2 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600 transition text-sm font-medium"
+                            onClick={() => setShowLichessModal(true)}
+                            className="flex-1 flex justify-center items-center gap-2 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition text-sm font-medium shadow-md shadow-blue-900/50"
                         >
-                            <ExternalLink size={16} /> Lichess Editor
+                            <BookOpen size={16} /> Export to Study
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Lichess Export Modal */}
+            {showLichessModal && (
+                <LichessExportModal
+                    settings={settings}
+                    pgn={(() => {
+                        const tempGame = new Chess(currentPosition);
+                        // If there were moves made on the scanner board, re-apply them
+                        if (game.history().length > 0) {
+                            tempGame.loadPgn(game.pgn());
+                        }
+                        tempGame.header("setUp", "1", "FEN", currentPosition);
+                        return tempGame.pgn() || `[FEN "${currentPosition}"]\n[SetUp "1"]\n\n*`;
+                    })()}
+                    onClose={() => setShowLichessModal(false)}
+                    defaultChapterName="Scanned Position"
+                />
+            )}
 
             {/* Image Display Panel */}
             {uploadedImage && showImagePanel && (

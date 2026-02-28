@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink, ChevronDown, Copy, FileText, ChevronUp } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ChevronDown, Copy, FileText, ChevronUp, BookOpen } from "lucide-react";
+import LichessExportModal from "./LichessExportModal";
 
 type AnalysisResult = {
   bestMove: string;
@@ -68,6 +69,7 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
   const [isMounted, setIsMounted] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showLichessModal, setShowLichessModal] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -203,25 +205,35 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
     setGameMetadata(null);
   }
 
-  function exportPgn() {
+  function getFormattedPgn() {
     const gameCopy = new Chess();
     gameCopy.loadPgn(game.pgn());
 
-    // Add standard headers for maximum compatibility with Lichess/Chess.com
     const today = new Date();
-    const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+    let formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+
+    if (gameMetadata?.date) {
+      const parsedDate = new Date(gameMetadata.date);
+      if (!isNaN(parsedDate.getTime())) {
+        formattedDate = `${parsedDate.getFullYear()}.${String(parsedDate.getMonth() + 1).padStart(2, '0')}.${String(parsedDate.getDate()).padStart(2, '0')}`;
+      }
+    }
 
     gameCopy.header(
       "Event", gameMetadata?.event || "Post-game Analysis",
       "Site", "Chess Analyzer App",
-      "Date", gameMetadata?.date || formattedDate,
+      "Date", formattedDate,
       "Round", gameMetadata?.round || "-",
       "White", gameMetadata?.white || "Player 1",
       "Black", gameMetadata?.black || "Player 2",
       "Result", "*"
     );
 
-    const pgn = gameCopy.pgn();
+    return gameCopy.pgn();
+  }
+
+  function exportPgn() {
+    const pgn = getFormattedPgn();
     const blob = new Blob([pgn], { type: "application/x-chess-pgn" });
     const url = URL.createObjectURL(blob);
 
@@ -250,67 +262,13 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
   }
 
   function copyPgn() {
-    const gameCopy = new Chess();
-    gameCopy.loadPgn(game.pgn());
-
-    const today = new Date();
-    const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-
-    gameCopy.header(
-      "Event", gameMetadata?.event || "Post-game Analysis",
-      "Site", "Chess Analyzer App",
-      "Date", gameMetadata?.date || formattedDate,
-      "Round", gameMetadata?.round || "-",
-      "White", gameMetadata?.white || "Player 1",
-      "Black", gameMetadata?.black || "Player 2",
-      "Result", "*"
-    );
-
-    const pgn = gameCopy.pgn();
+    const pgn = getFormattedPgn();
     navigator.clipboard.writeText(pgn).then(() => {
       addLog("PGN copied to clipboard", "info");
     }).catch(err => {
       setErrorMsg("Failed to copy PGN");
       addLog(`Failed to copy PGN: ${err.message}`, "error");
     });
-  }
-
-  function exportToLichess() {
-    const gameCopy = new Chess();
-    gameCopy.loadPgn(game.pgn());
-
-    const today = new Date();
-    const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-
-    gameCopy.header(
-      "Event", gameMetadata?.event || "Post-game Analysis",
-      "Site", "Chess Analyzer App",
-      "Date", gameMetadata?.date || formattedDate,
-      "Round", gameMetadata?.round || "-",
-      "White", gameMetadata?.white || "Player 1",
-      "Black", gameMetadata?.black || "Player 2",
-      "Result", "*"
-    );
-
-    const pgn = gameCopy.pgn();
-
-    // Create a hidden form to submit a POST request to Lichess
-    const form = document.createElement("form");
-    form.action = "https://lichess.org/import";
-    form.method = "post";
-    form.target = "_blank";
-
-    const input = document.createElement("textarea"); // textarea can handle multi-line strings better
-    input.name = "pgn";
-    input.value = pgn;
-    form.appendChild(input);
-
-    document.body.appendChild(form);
-    form.submit();
-
-    setTimeout(() => {
-      document.body.removeChild(form);
-    }, 100);
   }
 
   // Calculate Eval Bar height (0 to 100%)
@@ -584,10 +542,10 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
                   <Download size={16} /> Download PGN
                 </button>
                 <button
-                  onClick={() => { exportToLichess(); setShowExportMenu(false); }}
+                  onClick={() => { setShowLichessModal(true); setShowExportMenu(false); }}
                   className="w-full text-left px-4 py-3 hover:bg-slate-700 flex items-center gap-2 text-sm text-slate-200 transition"
                 >
-                  <ExternalLink size={16} /> Open in Lichess
+                  <BookOpen size={16} /> Export to Study
                 </button>
               </div>
             )}
@@ -847,6 +805,16 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lichess Export Modal */}
+      {showLichessModal && (
+        <LichessExportModal
+          settings={settings}
+          pgn={getFormattedPgn()}
+          onClose={() => setShowLichessModal(false)}
+          defaultChapterName={`${gameMetadata?.white || 'Player 1'} vs ${gameMetadata?.black || 'Player 2'}`}
+        />
       )}
     </div>
   );
