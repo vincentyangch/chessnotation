@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -45,6 +45,7 @@ export default function AnalysisBoard() {
   const [parsedMoves, setParsedMoves] = useState<ParsedMove[]>([]);
   const [currentParsedIndex, setCurrentParsedIndex] = useState(0);
   const [isParsingImage, setIsParsingImage] = useState(false);
+  const [fastMode, setFastMode] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [showImagePanel, setShowImagePanel] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +53,7 @@ export default function AnalysisBoard() {
   const boardWrapperRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(400);
   const [isMounted, setIsMounted] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -158,7 +160,15 @@ export default function AnalysisBoard() {
     setAnalysis(null);
   }
 
-  function resetGame() {
+  function handleResetClick() {
+    if (history.length > 0 || uploadedImage || parsedMoves.length > 0) {
+      setShowResetConfirm(true);
+    } else {
+      executeReset();
+    }
+  }
+
+  function executeReset() {
     const newGame = new Chess();
     setGame(newGame);
     setCurrentPosition(newGame.fen());
@@ -167,6 +177,7 @@ export default function AnalysisBoard() {
     setParsedMoves([]);
     setCurrentParsedIndex(0);
     setUploadedImage(null);
+    setShowResetConfirm(false);
   }
 
   function exportPgn() {
@@ -251,7 +262,7 @@ export default function AnalysisBoard() {
         const res = await fetch('/api/parse-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64data, mimeType: file.type })
+          body: JSON.stringify({ imageBase64: base64data, mimeType: file.type, fastMode })
         });
 
         if (res.ok) {
@@ -372,11 +383,9 @@ export default function AnalysisBoard() {
               className="w-full bg-slate-200 transition-all duration-500 ease-in-out"
               style={{ height: whiteHeight }}
             />
-            {analysis && (
-              <div className={`absolute left-0 right-0 py-1 text-center text-[10px] font-bold z-10 ${evalPercentage > 50 ? 'top-1 text-slate-800' : 'bottom-1 text-slate-200'}`}>
-                {evalText}
-              </div>
-            )}
+            <div className={`absolute left-0 right-0 py-1 text-center text-xs font-bold z-10 mix-blend-difference text-white ${evalPercentage >= 50 ? 'top-1' : 'bottom-1'}`}>
+              {evalText}
+            </div>
             {/* Middle line marker */}
             <div className="absolute top-1/2 left-0 right-0 h-px bg-slate-500/50 -translate-y-1/2" />
           </div>
@@ -412,7 +421,7 @@ export default function AnalysisBoard() {
             <Undo2 size={16} /> Undo
           </button>
           <button
-            onClick={resetGame}
+            onClick={handleResetClick}
             className="flex items-center gap-2 px-3 py-2 bg-slate-800 text-slate-200 rounded-md hover:bg-slate-700 transition text-sm font-medium"
           >
             <RotateCcw size={16} /> Reset
@@ -441,6 +450,20 @@ export default function AnalysisBoard() {
           >
             <Bug size={16} className={showDebug ? "text-emerald-400" : "text-slate-400"} />
           </button>
+
+          {/* Fast Mode Toggle */}
+          <button
+            onClick={() => setFastMode(!fastMode)}
+            className={`flex items-center gap-2 px-3 py-2 border rounded-md transition text-sm font-medium mr-2 
+              ${fastMode
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+            title="Fast Mode: Extract moves without drawing bounding boxes on the image (Much faster)"
+          >
+            <Zap size={16} className={fastMode ? "fill-amber-400" : ""} />
+            <span className="hidden sm:inline">Fast Mode</span>
+          </button>
+
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isParsingImage}
@@ -601,6 +624,39 @@ export default function AnalysisBoard() {
                   style={activeBoxStyle}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-700 flex gap-3 items-center bg-slate-800/50">
+              <div className="bg-red-500/20 p-2 rounded-full text-red-400">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-100">Reset Board?</h3>
+            </div>
+            <div className="p-5">
+              <p className="text-slate-300 text-sm leading-relaxed">
+                Are you sure you want to completely reset the board and clear all history, analysis, and photos? This action cannot be undone.
+              </p>
+            </div>
+            <div className="p-4 flex justify-end gap-3 border-t border-slate-700/50 bg-slate-900/50">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-md hover:bg-slate-700 hover:text-white transition text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeReset}
+                className="px-4 py-2 bg-red-500/90 text-white rounded-md hover:bg-red-500 transition text-sm font-medium shadow-sm shadow-red-900/20"
+              >
+                Reset Everything
+              </button>
             </div>
           </div>
         </div>
