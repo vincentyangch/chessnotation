@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { Chess, Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Upload, Loader2, Camera, Trash2, Copy, ExternalLink, Image as ImageIcon, ImageOff } from "lucide-react";
+import { AppSettings } from "@/app/page";
 
-export default function BoardScanner() {
+export default function BoardScanner({ settings }: { settings: AppSettings }) {
     const [game, setGame] = useState(new Chess());
     const [currentPosition, setCurrentPosition] = useState(game.fen());
 
@@ -54,7 +55,12 @@ export default function BoardScanner() {
                 const res = await fetch('/api/parse-board', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imageBase64: base64data, mimeType: file.type })
+                    body: JSON.stringify({
+                        imageBase64: base64data,
+                        mimeType: file.type,
+                        apiKey: settings.geminiApiKey,
+                        model: settings.geminiModel
+                    })
                 });
 
                 if (res.ok) {

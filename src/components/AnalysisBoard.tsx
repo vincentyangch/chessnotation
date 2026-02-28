@@ -28,7 +28,9 @@ interface GameMetadata {
   black?: string;
 }
 
-export default function AnalysisBoard() {
+import { AppSettings } from "@/app/page";
+
+export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
   const [game, setGame] = useState(new Chess());
   const [currentPosition, setCurrentPosition] = useState(game.fen());
   const [history, setHistory] = useState<Move[]>([]);
@@ -57,7 +59,6 @@ export default function AnalysisBoard() {
   const [parsedMoves, setParsedMoves] = useState<ParsedMove[]>([]);
   const [currentParsedIndex, setCurrentParsedIndex] = useState(0);
   const [isParsingImage, setIsParsingImage] = useState(false);
-  const [fastMode, setFastMode] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [showImagePanel, setShowImagePanel] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +83,12 @@ export default function AnalysisBoard() {
 
   // Fetch analysis when position changes
   useEffect(() => {
+    if (!settings.stockfishEnabled) {
+      setAnalysis(null);
+      setIsAnalyzing(false);
+      return;
+    }
+
     const fetchAnalysis = async (fen: string) => {
       setIsAnalyzing(true);
       setErrorMsg("");
@@ -90,7 +97,7 @@ export default function AnalysisBoard() {
         const res = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fen, depth: 10 }) // moderate depth for speed
+          body: JSON.stringify({ fen, depth: settings.stockfishDepth })
         });
         if (res.ok) {
           const data = await res.json();
@@ -117,7 +124,7 @@ export default function AnalysisBoard() {
       fetchAnalysis(currentPosition);
     }, 400);
     return () => clearTimeout(timer);
-  }, [currentPosition]);
+  }, [currentPosition, settings.stockfishEnabled, settings.stockfishDepth]);
 
   function makeAMove(move: { from: string; to: string; promotion?: string }) {
     const gameCopy = new Chess();
@@ -342,7 +349,13 @@ export default function AnalysisBoard() {
         const res = await fetch('/api/parse-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64data, mimeType: file.type, fastMode })
+          body: JSON.stringify({
+            imageBase64: base64data,
+            mimeType: file.type,
+            fastMode: settings.fastMode,
+            apiKey: settings.geminiApiKey,
+            model: settings.geminiModel
+          })
         });
 
         if (res.ok) {
@@ -539,18 +552,6 @@ export default function AnalysisBoard() {
             <Bug size={16} className={showDebug ? "text-emerald-400" : "text-slate-400"} />
           </button>
 
-          {/* Fast Mode Toggle */}
-          <button
-            onClick={() => setFastMode(!fastMode)}
-            className={`flex items-center gap-2 px-3 py-2 border rounded-md transition text-sm font-medium mr-2 
-              ${fastMode
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
-            title="Fast Mode: Extract moves without drawing bounding boxes on the image (Much faster)"
-          >
-            <Zap size={16} className={fastMode ? "fill-amber-400" : ""} />
-            <span className="hidden sm:inline">Fast Mode</span>
-          </button>
 
           <button
             onClick={() => fileInputRef.current?.click()}

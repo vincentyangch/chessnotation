@@ -6,14 +6,14 @@ export const maxDuration = 60; // Allow more time for Gemini to process the imag
 
 export async function POST(req: Request) {
     try {
-        const apiKey = process.env.GEMINI_API_KEY;
+        const body = await req.json();
+        const { imageBase64, mimeType = "image/jpeg", fastMode = false, apiKey: reqApiKey, model = "gemini-3-flash-preview" } = body;
+
+        const apiKey = reqApiKey || process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
-            return NextResponse.json({ error: "GEMINI_API_KEY environment variable is missing." }, { status: 500 });
+            return NextResponse.json({ error: "GEMINI_API_KEY environment variable is missing and no API key provided in request." }, { status: 500 });
         }
-
-        const body = await req.json();
-        const { imageBase64, mimeType = "image/jpeg", fastMode = false } = body;
 
         if (!imageBase64) {
             return NextResponse.json({ error: "No imageBase64 provided." }, { status: 400 });
@@ -82,7 +82,7 @@ Follow these exact rules:
         const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: model,
             contents: [
                 {
                     role: 'user',
