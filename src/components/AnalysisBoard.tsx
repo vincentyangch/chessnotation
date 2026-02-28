@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink, ChevronDown, Copy } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink, ChevronDown, Copy, FileText, ChevronUp } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -20,10 +20,22 @@ type ParsedMove = {
   box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] scaled 0-1000
 };
 
+interface GameMetadata {
+  event?: string;
+  date?: string;
+  round?: string;
+  white?: string;
+  black?: string;
+}
+
 export default function AnalysisBoard() {
   const [game, setGame] = useState(new Chess());
   const [currentPosition, setCurrentPosition] = useState(game.fen());
   const [history, setHistory] = useState<Move[]>([]);
+
+  // Metadata from parsed image
+  const [gameMetadata, setGameMetadata] = useState<GameMetadata | null>(null);
+  const [showMetadata, setShowMetadata] = useState(false);
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -91,6 +103,7 @@ export default function AnalysisBoard() {
           setErrorMsg("Analysis failed.");
           addLog(`Analysis completely failed. HTTP ${res.status}`, 'error');
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setErrorMsg("Failed to connect to engine.");
         addLog(`Engine connection exception: ${e.message}`, 'error');
@@ -133,6 +146,7 @@ export default function AnalysisBoard() {
     return false;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function onDrop({ sourceSquare, targetSquare, piece }: any) {
     if (!targetSquare) return false;
 
@@ -179,6 +193,7 @@ export default function AnalysisBoard() {
     setCurrentParsedIndex(0);
     setUploadedImage(null);
     setShowResetConfirm(false);
+    setGameMetadata(null);
   }
 
   function exportPgn() {
@@ -190,12 +205,12 @@ export default function AnalysisBoard() {
     const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
 
     gameCopy.header(
-      "Event", "Post-game Analysis",
+      "Event", gameMetadata?.event || "Post-game Analysis",
       "Site", "Chess Analyzer App",
-      "Date", formattedDate,
-      "Round", "-",
-      "White", "Player 1",
-      "Black", "Player 2",
+      "Date", gameMetadata?.date || formattedDate,
+      "Round", gameMetadata?.round || "-",
+      "White", gameMetadata?.white || "Player 1",
+      "Black", gameMetadata?.black || "Player 2",
       "Result", "*"
     );
 
@@ -235,12 +250,12 @@ export default function AnalysisBoard() {
     const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
 
     gameCopy.header(
-      "Event", "Post-game Analysis",
+      "Event", gameMetadata?.event || "Post-game Analysis",
       "Site", "Chess Analyzer App",
-      "Date", formattedDate,
-      "Round", "-",
-      "White", "Player 1",
-      "Black", "Player 2",
+      "Date", gameMetadata?.date || formattedDate,
+      "Round", gameMetadata?.round || "-",
+      "White", gameMetadata?.white || "Player 1",
+      "Black", gameMetadata?.black || "Player 2",
       "Result", "*"
     );
 
@@ -261,12 +276,12 @@ export default function AnalysisBoard() {
     const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
 
     gameCopy.header(
-      "Event", "Post-game Analysis",
+      "Event", gameMetadata?.event || "Post-game Analysis",
       "Site", "Chess Analyzer App",
-      "Date", formattedDate,
-      "Round", "-",
-      "White", "Player 1",
-      "Black", "Player 2",
+      "Date", gameMetadata?.date || formattedDate,
+      "Round", gameMetadata?.round || "-",
+      "White", gameMetadata?.white || "Player 1",
+      "Black", gameMetadata?.black || "Player 2",
       "Result", "*"
     );
 
@@ -335,6 +350,12 @@ export default function AnalysisBoard() {
           if (data.moves && Array.isArray(data.moves)) {
             addLog(`Successfully parsed ${data.moves.length} moves.`);
             setParsedMoves(data.moves);
+
+            if (data.metadata) {
+              setGameMetadata(data.metadata);
+              addLog(`Found game metadata: ${JSON.stringify(data.metadata)}`, "info");
+            }
+
             setCurrentParsedIndex(0);
             setUploadedImage(base64data);
             setShowImagePanel(true);
@@ -354,6 +375,7 @@ export default function AnalysisBoard() {
         setIsParsingImage(false);
       };
       reader.readAsDataURL(file);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setErrorMsg("Error uploading image.");
       addLog(`File upload/parse exception: ${e.message}`, 'error');
@@ -466,6 +488,7 @@ export default function AnalysisBoard() {
                 onPieceDrop: onDrop,
                 darkSquareStyle: { backgroundColor: "#475569" },
                 lightSquareStyle: { backgroundColor: "#cbd5e1" },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 arrows: arrowOptions as any,
                 animationDurationInMs: 200
               }}
@@ -640,6 +663,78 @@ export default function AnalysisBoard() {
           </div>
         </div>
 
+        {/* Metadata Editor */}
+        <div className="p-4 bg-slate-900 border-b border-slate-700">
+          <button
+            onClick={() => setShowMetadata(!showMetadata)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <div className="flex items-center gap-2 text-indigo-400 font-semibold tracking-wide text-sm uppercase">
+              <FileText size={16} />
+              <span>Game Metadata</span>
+              {gameMetadata && Object.values(gameMetadata).some(v => v) && (
+                <span className="ml-2 w-2 h-2 rounded-full bg-emerald-500"></span>
+              )}
+            </div>
+            {showMetadata ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+          </button>
+
+          {showMetadata && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="flex flex-col gap-1">
+                <label className="text-slate-400 text-xs font-semibold">White Player</label>
+                <input
+                  type="text"
+                  value={gameMetadata?.white || ''}
+                  onChange={(e) => setGameMetadata({ ...gameMetadata, white: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-indigo-500 transition"
+                  placeholder="Player 1"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-slate-400 text-xs font-semibold">Black Player</label>
+                <input
+                  type="text"
+                  value={gameMetadata?.black || ''}
+                  onChange={(e) => setGameMetadata({ ...gameMetadata, black: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-indigo-500 transition"
+                  placeholder="Player 2"
+                />
+              </div>
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <label className="text-slate-400 text-xs font-semibold">Event</label>
+                <input
+                  type="text"
+                  value={gameMetadata?.event || ''}
+                  onChange={(e) => setGameMetadata({ ...gameMetadata, event: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-indigo-500 transition"
+                  placeholder="Post-game Analysis"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-slate-400 text-xs font-semibold">Date</label>
+                <input
+                  type="text"
+                  value={gameMetadata?.date || ''}
+                  onChange={(e) => setGameMetadata({ ...gameMetadata, date: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-indigo-500 transition"
+                  placeholder="YYYY.MM.DD"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-slate-400 text-xs font-semibold">Round</label>
+                <input
+                  type="text"
+                  value={gameMetadata?.round || ''}
+                  onChange={(e) => setGameMetadata({ ...gameMetadata, round: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-indigo-500 transition"
+                  placeholder="-"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Debug Console */}
         {showDebug ? (
           <div className="flex-1 p-4 bg-slate-950 overflow-y-auto max-h-[400px] border-t border-slate-700 font-mono text-xs">
@@ -663,6 +758,7 @@ export default function AnalysisBoard() {
           <div className="flex-1 p-4 overflow-y-auto min-h-[300px] max-h-[400px]">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Move History</h3>
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm leading-relaxed">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {history.reduce((result: any[], move: Move, index: number) => {
                 if (index % 2 === 0) {
                   result.push([move]);

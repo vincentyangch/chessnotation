@@ -16,7 +16,7 @@ export async function POST(req: Request) {
             let bestMove = "";
             let scoreCp = 0;
             let mate: number | null = null;
-            let messageLog: string[] = [];
+            const messageLog: string[] = [];
             let resolved = false;
 
             engine.stdout.on('data', (data) => {
@@ -87,7 +87,9 @@ export async function POST(req: Request) {
                 }
             }, 5000);
         });
-    } catch (error: any) {
-        return NextResponse.json({ error: "Internal server error", details: error.message }, { status: 500 });
+    } catch (error) {
+        let errorMessage = "Unknown error";
+        if (error instanceof Error) errorMessage = error.message;
+        return NextResponse.json({ error: "Internal server error", details: errorMessage }, { status: 500 });
     }
 }
