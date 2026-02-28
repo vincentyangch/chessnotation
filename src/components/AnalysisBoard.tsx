@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink, ChevronDown, Copy } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -54,6 +54,7 @@ export default function AnalysisBoard() {
   const [boardWidth, setBoardWidth] = useState(400);
   const [isMounted, setIsMounted] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -224,6 +225,32 @@ export default function AnalysisBoard() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 100);
+  }
+
+  function copyPgn() {
+    const gameCopy = new Chess();
+    gameCopy.loadPgn(game.pgn());
+
+    const today = new Date();
+    const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+
+    gameCopy.header(
+      "Event", "Post-game Analysis",
+      "Site", "Chess Analyzer App",
+      "Date", formattedDate,
+      "Round", "-",
+      "White", "Player 1",
+      "Black", "Player 2",
+      "Result", "*"
+    );
+
+    const pgn = gameCopy.pgn();
+    navigator.clipboard.writeText(pgn).then(() => {
+      addLog("PGN copied to clipboard", "info");
+    }).catch(err => {
+      setErrorMsg("Failed to copy PGN");
+      addLog(`Failed to copy PGN: ${err.message}`, "error");
+    });
   }
 
   function exportToLichess() {
@@ -510,18 +537,37 @@ export default function AnalysisBoard() {
             {isParsingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
             {isParsingImage ? "Parsing..." : "Upload Photo"}
           </button>
-          <button
-            onClick={exportPgn}
-            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium shadow-md shadow-indigo-900/50 mr-2"
-          >
-            <Download size={16} /> Export
-          </button>
-          <button
-            onClick={exportToLichess}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-900 rounded-md hover:bg-white transition text-sm font-bold shadow-md shadow-slate-900/50"
-          >
-            <ExternalLink size={16} /> Lichess
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              onBlur={() => setTimeout(() => setShowExportMenu(false), 200)}
+              className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium shadow-md shadow-indigo-900/50"
+            >
+              <Download size={16} /> Export <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? "rotate-180" : ""}`} />
+            </button>
+            {showExportMenu && (
+              <div className="absolute left-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50 overflow-hidden">
+                <button
+                  onClick={() => { copyPgn(); setShowExportMenu(false); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-700 flex items-center gap-2 text-sm text-slate-200 transition"
+                >
+                  <Copy size={16} /> Copy PGN
+                </button>
+                <button
+                  onClick={() => { exportPgn(); setShowExportMenu(false); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-700 flex items-center gap-2 text-sm text-slate-200 transition"
+                >
+                  <Download size={16} /> Download PGN
+                </button>
+                <button
+                  onClick={() => { exportToLichess(); setShowExportMenu(false); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-700 flex items-center gap-2 text-sm text-slate-200 transition"
+                >
+                  <ExternalLink size={16} /> Open in Lichess
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Review Mode Panel */}
