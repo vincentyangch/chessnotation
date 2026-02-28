@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Chess, Move } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle } from "lucide-react";
+import { RotateCcw, Undo2, Download, Play, SquareTerminal, Loader2, Upload, Check, SkipForward, X, Image as ImageIcon, ImageOff, Bug, Zap, AlertTriangle, ExternalLink } from "lucide-react";
 
 type AnalysisResult = {
   bestMove: string;
@@ -223,6 +223,44 @@ export default function AnalysisBoard() {
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }, 100);
+  }
+
+  function exportToLichess() {
+    const gameCopy = new Chess();
+    gameCopy.loadPgn(game.pgn());
+
+    const today = new Date();
+    const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+
+    gameCopy.header(
+      "Event", "Post-game Analysis",
+      "Site", "Chess Analyzer App",
+      "Date", formattedDate,
+      "Round", "-",
+      "White", "Player 1",
+      "Black", "Player 2",
+      "Result", "*"
+    );
+
+    const pgn = gameCopy.pgn();
+
+    // Create a hidden form to submit a POST request to Lichess
+    const form = document.createElement("form");
+    form.action = "https://lichess.org/import";
+    form.method = "post";
+    form.target = "_blank";
+
+    const input = document.createElement("textarea"); // textarea can handle multi-line strings better
+    input.name = "pgn";
+    input.value = pgn;
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+
+    setTimeout(() => {
+      document.body.removeChild(form);
     }, 100);
   }
 
@@ -474,9 +512,15 @@ export default function AnalysisBoard() {
           </button>
           <button
             onClick={exportPgn}
-            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium shadow-md shadow-indigo-900/50"
+            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition text-sm font-medium shadow-md shadow-indigo-900/50 mr-2"
           >
             <Download size={16} /> Export
+          </button>
+          <button
+            onClick={exportToLichess}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-900 rounded-md hover:bg-white transition text-sm font-bold shadow-md shadow-slate-900/50"
+          >
+            <ExternalLink size={16} /> Lichess
           </button>
         </div>
 
