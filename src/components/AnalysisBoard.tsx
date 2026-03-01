@@ -17,7 +17,7 @@ import ResetConfirmModal from "./shared/ResetConfirmModal";
 import ImagePanel from "./shared/ImagePanel";
 import ExportDropdown from "./shared/ExportDropdown";
 import LichessExportModal from "./LichessExportModal";
-import type { AppSettings } from "@/types";
+import type { AppSettings, GameMetadata } from "@/types";
 
 export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
   const { boardWrapperRef, isMounted } = useBoardResize();
@@ -71,7 +71,10 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
   } = useImageParser({
     settings,
     onMoveParsed: (_moves, metadata) => {
-      if (metadata) setGameMetadata(metadata);
+      // Only set metadata for the first page
+      if (metadata && parsedMoves.length === 0) {
+        setGameMetadata(metadata);
+      }
     },
     addLog,
   });
@@ -194,7 +197,7 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
             type="file"
             accept="image/*"
             ref={fileInputRef}
-            onChange={handleFileUpload}
+            onChange={(e) => handleFileUpload(e)}
             className="hidden"
           />
           {uploadedImage && (
@@ -236,6 +239,8 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
           onSkip={skipParsedMove}
           onRevert={revertParsedMove}
           onCancel={cancelParsedReview}
+          onUploadNextPage={triggerFileInput}
+          isParsing={isParsingImage}
         />
 
         {/* Engine output */}
@@ -281,7 +286,14 @@ export default function AnalysisBoard({ settings }: { settings: AppSettings }) {
         <ImagePanel
           image={uploadedImage}
           title="Notation Sheet"
-          badgeText={`${parsedMoves.length} moves parsed`}
+          badgeText={(() => {
+            if (currentParsedIndex < parsedMoves.length) {
+              const currentImageIndex = parsedMoves[currentParsedIndex].imageIndex;
+              const count = parsedMoves.filter(m => m.imageIndex === currentImageIndex).length;
+              return `${count} moves on this page`;
+            }
+            return `${parsedMoves.length} total moves reviewed`;
+          })()}
           activeBoxStyle={activeBoxStyle}
           showBox={currentParsedIndex < parsedMoves.length}
         />

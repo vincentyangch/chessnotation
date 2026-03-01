@@ -8,7 +8,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { imageBase64, mimeType = "image/jpeg", fastMode = false, apiKey: reqApiKey, model = "gemini-3-flash-preview" } = body;
+        const { imageBase64, mimeType = "image/jpeg", fastMode = false, apiKey: reqApiKey, model = "gemini-3-flash-preview", currentPgn = "" } = body;
 
         const apiKey = reqApiKey || process.env.GEMINI_API_KEY;
 

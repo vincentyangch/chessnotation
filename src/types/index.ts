@@ -30,7 +30,8 @@ export type AnalysisResult = {
 
 export type ParsedMove = {
     move: string;
-    box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] scaled 0-1000
+    box?: [number, number, number, number]; // [ymin, xmin, ymax, xmax] scaled 0-1000
+    imageIndex?: number; // Which image in the sequence this move belongs to
 };
 
 export interface GameMetadata {

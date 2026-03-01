@@ -11,13 +11,19 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
     const [parsedMoves, setParsedMoves] = useState<ParsedMove[]>([]);
     const [currentParsedIndex, setCurrentParsedIndex] = useState(0);
     const [isParsingImage, setIsParsingImage] = useState(false);
-    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [showImagePanel, setShowImagePanel] = useState(true);
     const [parseError, setParseError] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement> | File) => {
+        let file: File | undefined;
+        if (e instanceof File) {
+            file = e;
+        } else {
+            file = e.target.files?.[0];
+        }
+        
         if (!file) return;
 
         setIsParsingImage(true);
@@ -46,9 +52,22 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
                     const data = await res.json();
                     if (data.moves && Array.isArray(data.moves)) {
                         addLog?.(`Successfully parsed ${data.moves.length} moves.`);
-                        setParsedMoves(data.moves);
-                        setCurrentParsedIndex(0);
-                        setUploadedImage(base64data);
+                        
+                        const newImageIndex = uploadedImages.length;
+                        const movesWithIndex = data.moves.map((m: any) => ({
+                            ...m,
+                            imageIndex: newImageIndex
+                        }));
+
+                        setUploadedImages(prev => [...prev, base64data]);
+                        setParsedMoves(prev => [...prev, ...movesWithIndex]);
+                        
+                        // If we were already at the end of a previous page, 
+                        // move the pointer to the first move of the new page.
+                        if (currentParsedIndex >= parsedMoves.length) {
+                            setCurrentParsedIndex(parsedMoves.length);
+                        }
+
                         setShowImagePanel(true);
 
                         const metadata = data.metadata || null;
@@ -81,12 +100,13 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
         }
 
         if (fileInputRef.current) fileInputRef.current.value = "";
-    }, [settings, addLog, onMoveParsed]);
+    }, [settings, addLog, onMoveParsed, uploadedImages.length, currentParsedIndex, parsedMoves.length]);
 
     const acceptParsedMove = useCallback(() => {
         if (currentParsedIndex < parsedMoves.length) {
+            const move = parsedMoves[currentParsedIndex];
             setCurrentParsedIndex(prev => prev + 1);
-            return parsedMoves[currentParsedIndex];
+            return move;
         }
         return null;
     }, [currentParsedIndex, parsedMoves]);
@@ -106,13 +126,13 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
     const cancelParsedReview = useCallback(() => {
         setParsedMoves([]);
         setCurrentParsedIndex(0);
-        setUploadedImage(null);
+        setUploadedImages([]);
     }, []);
 
     const resetParser = useCallback(() => {
         setParsedMoves([]);
         setCurrentParsedIndex(0);
-        setUploadedImage(null);
+        setUploadedImages([]);
         setParseError("");
     }, []);
 
@@ -122,7 +142,12 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
 
     // Compute bounding box style for the current parsed move
     let activeBoxStyle: React.CSSProperties = {};
-    if (uploadedImage && showImagePanel && parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length) {
+    const currentMove = parsedMoves[currentParsedIndex];
+    const currentImage = currentMove?.imageIndex !== undefined 
+        ? uploadedImages[currentMove.imageIndex] 
+        : (uploadedImages.length > 0 ? uploadedImages[uploadedImages.length - 1] : null);
+
+    if (currentImage && showImagePanel && parsedMoves.length > 0 && currentParsedIndex < parsedMoves.length) {
         const box = parsedMoves[currentParsedIndex].box;
         if (box && box.length === 4) {
             const [ymin, xmin, ymax, xmax] = box;
@@ -145,7 +170,8 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
         parsedMoves,
         currentParsedIndex,
         isParsingImage,
-        uploadedImage,
+        uploadedImage: currentImage || null,
+        uploadedImages,
         showImagePanel,
         setShowImagePanel,
         parseError,
