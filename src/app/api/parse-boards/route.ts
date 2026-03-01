@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { getParseImagePrompt, getParseImageSchema } from '@/prompts/parseImage';
+import { detectBoardsPrompt, detectBoardsSchema } from '@/prompts/parseMultipleBoards';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -8,7 +8,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { imageBase64, mimeType = "image/jpeg", fastMode = false, apiKey: reqApiKey, model = "gemini-3-flash-preview" } = body;
+        const { imageBase64, mimeType = "image/jpeg", apiKey: reqApiKey, model = "gemini-3-flash-preview" } = body;
 
         const apiKey = reqApiKey || process.env.GEMINI_API_KEY;
 
@@ -30,15 +30,15 @@ export async function POST(req: Request) {
                     role: 'user',
                     parts: [
                         { inlineData: { data: cleanBase64, mimeType } },
-                        { text: "Extract the moves from this chess notation sheet." }
+                        { text: "Find all chessboards in this image. Return their bounding box locations and any labels/captions near them. Do NOT parse the positions." }
                     ]
                 }
             ],
             config: {
-                systemInstruction: getParseImagePrompt(fastMode),
+                systemInstruction: detectBoardsPrompt,
                 temperature: 0.1,
                 responseMimeType: "application/json",
-                responseSchema: getParseImageSchema(fastMode),
+                responseSchema: detectBoardsSchema,
             }
         });
 
@@ -46,19 +46,19 @@ export async function POST(req: Request) {
 
         try {
             const parsedData = JSON.parse(responseText);
-            if (!parsedData.moves || !Array.isArray(parsedData.moves)) {
-                throw new Error("Response does not contain a valid moves array");
+            if (!parsedData.boards || !Array.isArray(parsedData.boards)) {
+                throw new Error("Response does not contain a valid boards array");
             }
-            return NextResponse.json({ metadata: parsedData.metadata, moves: parsedData.moves });
-        } catch (jsonError: unknown) {
+            return NextResponse.json({ boards: parsedData.boards });
+        } catch {
             console.error("Failed to parse Gemini response as JSON:", responseText);
-            return NextResponse.json({ error: "Failed to parse moves from the image. Gemini did not return valid JSON.", rawText: responseText }, { status: 500 });
+            return NextResponse.json({ error: "Failed to detect boards. Gemini did not return valid JSON.", rawText: responseText }, { status: 500 });
         }
 
     } catch (error: unknown) {
         let errorMessage = "Unknown error";
         if (error instanceof Error) errorMessage = error.message;
-        console.error("Parse Image Error:", error);
-        return NextResponse.json({ error: "Internal server error parsing image.", details: errorMessage }, { status: 500 });
+        console.error("Detect Boards Error:", error);
+        return NextResponse.json({ error: "Internal server error detecting boards.", details: errorMessage }, { status: 500 });
     }
 }

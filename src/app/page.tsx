@@ -1,32 +1,29 @@
 "use client";
 
-import { useState } from "react";
 import AnalysisBoard from "@/components/AnalysisBoard";
 import BoardScanner from "@/components/BoardScanner";
-import { Activity, Camera, Settings, X } from "lucide-react";
-
-export type AppSettings = {
-  geminiApiKey: string;
-  geminiModel: string;
-  fastMode: boolean;
-  stockfishDepth: number;
-  stockfishEnabled: boolean;
-  lichessToken: string;
-};
-
-export const defaultSettings: AppSettings = {
-  geminiApiKey: "",
-  geminiModel: "gemini-3-flash-preview",
-  fastMode: false,
-  stockfishDepth: 10,
-  stockfishEnabled: true,
-  lichessToken: ""
-};
+import { Activity, Camera, Settings, X, AlertTriangle } from "lucide-react";
+import { useSettings } from "@/hooks/useSettings";
+import { useState } from "react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"analyzer" | "scanner">("analyzer");
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const { settings, updateSettings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
+  const [pendingTab, setPendingTab] = useState<"analyzer" | "scanner" | null>(null);
+
+  const handleTabSwitch = (tab: "analyzer" | "scanner") => {
+    if (tab === activeTab) return;
+    // Show confirmation before switching
+    setPendingTab(tab);
+  };
+
+  const confirmTabSwitch = () => {
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 p-4 md:p-8 font-sans antialiased">
@@ -34,14 +31,14 @@ export default function Home() {
         <header className="border-b border-slate-700 pb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
             <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent tracking-tight">
-              Chess Analyzer
+              Matthew&apos;s Treasure Chest
             </h1>
-            <p className="text-slate-400 mt-2 text-lg">Review and analyze your chess games with Stockfish</p>
+            <p className="text-slate-400 mt-2 text-lg">Scan boards, analyze notation, and review games with AI &amp; Stockfish</p>
           </div>
           <div className="flex gap-2">
             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 h-fit">
               <button
-                onClick={() => setActiveTab("analyzer")}
+                onClick={() => handleTabSwitch("analyzer")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md transition font-medium text-sm ${activeTab === "analyzer"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
@@ -50,7 +47,7 @@ export default function Home() {
                 <Activity size={18} /> Notation Analyzer
               </button>
               <button
-                onClick={() => setActiveTab("scanner")}
+                onClick={() => handleTabSwitch("scanner")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md transition font-medium text-sm ${activeTab === "scanner"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
@@ -71,6 +68,39 @@ export default function Home() {
 
         {activeTab === "analyzer" ? <AnalysisBoard settings={settings} /> : <BoardScanner settings={settings} />}
       </div>
+
+      {/* Tab Switch Confirmation Modal */}
+      {pendingTab && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-700 flex items-center gap-3 bg-slate-900">
+              <AlertTriangle size={20} className="text-amber-400" />
+              <h2 className="text-lg font-bold text-white">Switch Tab?</h2>
+            </div>
+            <div className="p-5 text-sm text-slate-300 space-y-2">
+              <p>
+                Switching to <strong className="text-white">{pendingTab === "analyzer" ? "Notation Analyzer" : "Board Scanner"}</strong> will
+                reset the current board state and cancel any active parsing jobs.
+              </p>
+              <p className="text-slate-400">Are you sure you want to continue?</p>
+            </div>
+            <div className="p-4 bg-slate-900 border-t border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => setPendingTab(null)}
+                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-md hover:bg-slate-700 hover:text-white transition text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmTabSwitch}
+                className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-500 transition text-sm font-medium shadow-md"
+              >
+                Switch Tab
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
@@ -96,7 +126,7 @@ export default function Home() {
                   <input
                     type="password"
                     value={settings.geminiApiKey}
-                    onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value })}
+                    onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
                     placeholder="Defaults to server environment variable"
                     className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
                   />
@@ -107,7 +137,7 @@ export default function Home() {
                   <input
                     type="text"
                     value={settings.geminiModel}
-                    onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
+                    onChange={(e) => updateSettings({ geminiModel: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
                   />
                 </div>
@@ -118,7 +148,7 @@ export default function Home() {
                     <div className="text-xs text-slate-400 mt-0.5">Skip bounding boxes for faster transcription</div>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, fastMode: !settings.fastMode })}
+                    onClick={() => updateSettings({ fastMode: !settings.fastMode })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.fastMode ? 'bg-indigo-500' : 'bg-slate-700'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.fastMode ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -136,7 +166,7 @@ export default function Home() {
                     <div className="text-xs text-slate-400 mt-0.5">Toggle local engine evaluation</div>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, stockfishEnabled: !settings.stockfishEnabled })}
+                    onClick={() => updateSettings({ stockfishEnabled: !settings.stockfishEnabled })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.stockfishEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.stockfishEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -153,7 +183,7 @@ export default function Home() {
                     max="20"
                     disabled={!settings.stockfishEnabled}
                     value={settings.stockfishDepth}
-                    onChange={(e) => setSettings({ ...settings, stockfishDepth: parseInt(e.target.value) })}
+                    onChange={(e) => updateSettings({ stockfishDepth: parseInt(e.target.value) })}
                     className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 disabled:opacity-50"
                   />
                   <div className="flex justify-between text-xs text-slate-500">
@@ -166,12 +196,12 @@ export default function Home() {
                   <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider">Lichess Integrations</h3>
 
                   <div className="space-y-2">
-                    <label className="text-sm text-slate-300 font-medium">Personal API Token</label>
+                    <label className="text-sm text-slate-300 font-medium">Personal API Token (Optional Override)</label>
                     <input
                       type="password"
                       value={settings.lichessToken}
-                      onChange={(e) => setSettings({ ...settings, lichessToken: e.target.value })}
-                      placeholder="lip_..."
+                      onChange={(e) => updateSettings({ lichessToken: e.target.value })}
+                      placeholder="Defaults to server environment variable"
                       className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
                     />
                     <div className="text-xs text-slate-500">

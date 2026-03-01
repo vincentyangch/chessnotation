@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import { parseBoardPrompt } from '@/prompts/parseBoard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -7,7 +8,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { imageBase64, mimeType = "image/jpeg", apiKey: reqApiKey, model = "gemini-3-flash-preview" } = body;
+        const { imageBase64, mimeType = "image/jpeg", apiKey: reqApiKey, model = "gemini-3-flash-preview", boardHint } = body;
 
         const apiKey = reqApiKey || process.env.GEMINI_API_KEY;
 
@@ -20,34 +21,14 @@ export async function POST(req: Request) {
         }
 
         const ai = new GoogleGenAI({ apiKey });
-
-        const systemInstruction = `You are an expert chess arbiter and computer vision system.
-Your task is to transcribe an image of a chessboard (could be a physical board, digital board, or a book diagram) into a Forsyth-Edwards Notation (FEN) string.
-
-Rules:
-1. Carefully scan the board from top-left (a8) to bottom-right (h1).
-2. White pieces are denoted by uppercase letters (P, N, B, R, Q, K).
-3. Black pieces are denoted by lowercase letters (p, n, b, r, q, k).
-4. Empty squares are denoted by numbers 1-8 representing consecutive empty squares.
-5. Rows are separated by a slash (/).
-6. Since we only see the board and not the game history, always append " w - - 0 1" to represent White to move, no castling rights, no en passant target, 0 half-move clock, and move number 1.
-7. Return a precise FEN string.
-
-Return ONLY a valid JSON object matching the requested schema.`;
-
-        const responseSchema: Schema = {
-            type: Type.OBJECT,
-            description: "The parsed chess position.",
-            properties: {
-                fen: {
-                    type: Type.STRING,
-                    description: "The complete Forsyth-Edwards Notation (FEN) string representing the board position shown in the image, e.g., 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1'"
-                }
-            },
-            required: ["fen"]
-        };
-
         const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+        // Build the user message — include bounding box hint if provided
+        let userText = "Output the FEN for this chess board.";
+        if (boardHint) {
+            const [ymin, xmin, ymax, xmax] = boardHint;
+            userText = `Focus on the chessboard in region [ymin=${ymin}, xmin=${xmin}, ymax=${ymax}, xmax=${xmax}] (scaled 0-1000). Output only that board's FEN.`;
+        }
 
         const response = await ai.models.generateContent({
             model: model,
@@ -56,29 +37,27 @@ Return ONLY a valid JSON object matching the requested schema.`;
                     role: 'user',
                     parts: [
                         { inlineData: { data: cleanBase64, mimeType } },
-                        { text: "Extract the FEN notation from this chess board." }
+                        { text: userText }
                     ]
                 }
             ],
             config: {
-                systemInstruction: systemInstruction,
-                temperature: 0.1, // Low temperature for factual transcription
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
+                systemInstruction: parseBoardPrompt,
+                temperature: 0.1,
             }
         });
 
-        const responseText = response.text || "{}";
+        const responseText = (response.text || "").trim();
 
-        try {
-            const parsedData = JSON.parse(responseText);
-            if (!parsedData.fen) {
-                throw new Error("FEN not found in response");
-            }
-            return NextResponse.json({ fen: parsedData.fen });
-        } catch (jsonError: unknown) {
-            console.error("Failed to parse Gemini response as JSON:", responseText);
-            return NextResponse.json({ error: "Failed to parse FEN from the image. Gemini did not return a valid FEN JSON.", rawText: responseText }, { status: 500 });
+        // Extract FEN from the plain-text response
+        // The response should be just a FEN string, but handle edge cases
+        const fen = extractFen(responseText);
+
+        if (fen) {
+            return NextResponse.json({ fen });
+        } else {
+            console.error("Could not extract FEN from response:", responseText);
+            return NextResponse.json({ error: "Failed to extract a valid FEN from the response.", rawText: responseText }, { status: 500 });
         }
 
     } catch (error: unknown) {
@@ -89,4 +68,29 @@ Return ONLY a valid JSON object matching the requested schema.`;
         console.error("Parse Board Error:", error);
         return NextResponse.json({ error: "Internal server error parsing board image.", details: errorMessage }, { status: 500 });
     }
+}
+
+/**
+ * Extract a FEN string from raw text.
+ * Handles cases where the model wraps it in backticks, quotes, or extra text.
+ */
+function extractFen(text: string): string | null {
+    // Remove markdown code fences
+    let cleaned = text.replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/g, '').trim());
+    cleaned = cleaned.replace(/`/g, '').trim();
+
+    // Try to match a FEN pattern: pieces/pieces/... followed by side-to-move etc.
+    const fenRegex = /([rnbqkpRNBQKP1-8]{1,8}\/){7}[rnbqkpRNBQKP1-8]{1,8}(\s+[bw]\s+[KQkq-]+\s+[a-h1-8-]+\s+\d+\s+\d+)?/;
+    const match = cleaned.match(fenRegex);
+
+    if (match) {
+        let fen = match[0].trim();
+        // If missing the trailing parts (side to move, castling, etc.), append defaults
+        if (!fen.includes(' ')) {
+            fen += ' w - - 0 1';
+        }
+        return fen;
+    }
+
+    return null;
 }

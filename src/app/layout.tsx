@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chess Analyzer",
-  description: "Review and analyze your chess games with Stockfish",
+  title: "Matthew's Treasure Chest",
+  description: "Scan chessboards, analyze notation, and review games with AI & Stockfish",
 };
 
 export default function RootLayout({

@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
-    const authHeader = req.headers.get('authorization');
+    let authHeader = req.headers.get('authorization');
+
+    // Fall back to server environment variable if no client token provided
+    if (!authHeader) {
+        const envToken = process.env.LICHESS_TOKEN;
+        if (envToken) {
+            authHeader = `Bearer ${envToken}`;
+        }
+    }
 
     if (!authHeader) {
-        return NextResponse.json({ error: "Missing authorization header" }, { status: 401 });
+        return NextResponse.json({ error: "No Lichess token configured. Set LICHESS_TOKEN env var or add one in Settings." }, { status: 401 });
     }
 
     try {
@@ -20,7 +28,7 @@ export async function GET(req: Request) {
 
         const data = await res.json();
         return NextResponse.json(data);
-    } catch (e: unknown) {
+    } catch {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
-    const authHeader = req.headers.get('authorization');
+    let authHeader = req.headers.get('authorization');
     const { searchParams } = new URL(req.url);
     const username = searchParams.get('username');
 
     if (!authHeader) {
-        return NextResponse.json({ error: "Missing authorization header" }, { status: 401 });
+        const envToken = process.env.LICHESS_TOKEN;
+        if (envToken) authHeader = `Bearer ${envToken}`;
+    }
+
+    if (!authHeader) {
+        return NextResponse.json({ error: "No Lichess token configured." }, { status: 401 });
     }
 
     if (!username) {
