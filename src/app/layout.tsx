@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Matthew's Treasure Chest",
+  title: "Chess Toolbox",
   description: "Scan chessboards, analyze notation, and review games with AI & Stockfish",
 };
 

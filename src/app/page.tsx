@@ -31,9 +31,14 @@ export default function Home() {
         <header className="border-b border-slate-700 pb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
             <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent tracking-tight">
-              Matthew&apos;s Treasure Chest
+              Chess Toolbox
             </h1>
-            <p className="text-slate-400 mt-2 text-lg">Scan boards, analyze notation, and review games with AI &amp; Stockfish</p>
+            <div className="flex items-center gap-3 mt-2">
+              <p className="text-slate-400 text-lg">Scan boards, analyze notation, and review games with AI &amp; Stockfish</p>
+              <span className="text-xs font-mono text-slate-500 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full whitespace-nowrap select-all" title="App version">
+                {process.env.NEXT_PUBLIC_APP_VERSION || "dev"}
+              </span>
+            </div>
           </div>
           <div className="flex gap-2">
             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 h-fit">
