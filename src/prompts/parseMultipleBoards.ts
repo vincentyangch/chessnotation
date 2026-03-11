@@ -1,5 +1,3 @@
-import { Type, Schema } from '@google/genai';
-
 export const detectBoardsPrompt = `You are an expert chess arbiter and computer vision system.
 Your task is to LOCATE all chessboards visible in an image (could be a book page, a magazine, a screenshot, etc.). You do NOT need to parse the positions — only find the board locations.
 
@@ -11,23 +9,23 @@ Rules:
 
 Return ONLY a valid JSON object matching the requested schema.`;
 
-export const detectBoardsSchema: Schema = {
-    type: Type.OBJECT,
+export const detectBoardsSchema: Record<string, unknown> = {
+    type: "object",
     description: "All chessboard locations detected in the image.",
     properties: {
         boards: {
-            type: Type.ARRAY,
+            type: "array",
             description: "List of detected chessboard locations.",
             items: {
-                type: Type.OBJECT,
+                type: "object",
                 properties: {
                     box: {
-                        type: Type.ARRAY,
+                        type: "array",
                         description: "Bounding box of the chessboard [ymin, xmin, ymax, xmax] scaled 0-1000 proportional to image dimensions.",
-                        items: { type: Type.INTEGER }
+                        items: { type: "integer" }
                     },
                     label: {
-                        type: Type.STRING,
+                        type: "string",
                         description: "Label or caption found near this board (e.g., 'Diagram 5', '5 - Black to play'). Empty string if none found."
                     }
                 },

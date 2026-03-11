@@ -1,7 +1,5 @@
-import { Type, Schema } from '@google/genai';
-
 export function getParseImagePrompt(fastMode: boolean): string {
-    const baseInstructions = `You are an expert chess arbiter and game transcriber with spatial reasoning capabilities. 
+    const baseInstructions = `You are an expert chess arbiter and game transcriber with spatial reasoning capabilities.
 Your task is to transcribe a handwritten or printed chess notation sheet into a JSON object.
 Follow these exact rules:
 1. Examine the image carefully. Extract any visible metadata from the top headers of the score sheet, such as Event Name, Date, Round Number, White Player Name, and Black Player Name.
@@ -17,37 +15,37 @@ Follow these exact rules:
     return baseInstructions + (fastMode ? fastInstructions : boxInstructions);
 }
 
-export function getParseImageSchema(fastMode: boolean): Schema {
+export function getParseImageSchema(fastMode: boolean): Record<string, unknown> {
     return {
-        type: Type.OBJECT,
+        type: "object",
         description: "Chess game transcription including metadata and moves.",
         properties: {
             metadata: {
-                type: Type.OBJECT,
+                type: "object",
                 description: "Game metadata extracted from the score sheet header. Provide empty strings if not found.",
                 properties: {
-                    event: { type: Type.STRING, description: "Event Name" },
-                    date: { type: Type.STRING, description: "Date (YYYY.MM.DD) or as written" },
-                    round: { type: Type.STRING, description: "Round Number" },
-                    white: { type: Type.STRING, description: "White Player Name" },
-                    black: { type: Type.STRING, description: "Black Player Name" }
+                    event: { type: "string", description: "Event Name" },
+                    date: { type: "string", description: "Date (YYYY.MM.DD) or as written" },
+                    round: { type: "string", description: "Round Number" },
+                    white: { type: "string", description: "White Player Name" },
+                    black: { type: "string", description: "Black Player Name" }
                 }
             },
             moves: {
-                type: Type.ARRAY,
+                type: "array",
                 description: "List of chess moves.",
                 items: {
-                    type: Type.OBJECT,
+                    type: "object",
                     properties: {
                         move: {
-                            type: Type.STRING,
+                            type: "string",
                             description: "The Standard Algebraic Notation (SAN) move."
                         },
                         ...(fastMode ? {} : {
                             box: {
-                                type: Type.ARRAY,
+                                type: "array",
                                 description: "Bounding box of the move on the image [ymin, xmin, ymax, xmax] scaled 0-1000.",
-                                items: { type: Type.INTEGER }
+                                items: { type: "integer" }
                             }
                         })
                     },

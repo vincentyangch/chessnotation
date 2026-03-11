@@ -43,8 +43,6 @@ export function useImageParser({ settings, onMoveParsed, addLog }: UseImageParse
                         imageBase64: base64data,
                         mimeType: file.type,
                         fastMode: settings.fastMode,
-                        apiKey: settings.geminiApiKey,
-                        model: settings.geminiModel
                     })
                 });
 

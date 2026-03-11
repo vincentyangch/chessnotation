@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { getAIProvider } from '@/lib/ai-provider';
 import { parseBoardPrompt } from '@/prompts/parseBoard';
 
 export const runtime = 'nodejs';
@@ -8,19 +8,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { imageBase64, mimeType = "image/jpeg", apiKey: reqApiKey, model = "gemini-3-flash-preview", boardHint } = body;
-
-        const apiKey = reqApiKey || process.env.GEMINI_API_KEY;
-
-        if (!apiKey) {
-            return NextResponse.json({ error: "GEMINI_API_KEY environment variable is missing and no API key provided in request." }, { status: 500 });
-        }
+        const { imageBase64, mimeType = "image/jpeg", boardHint } = body;
 
         if (!imageBase64) {
             return NextResponse.json({ error: "No imageBase64 provided." }, { status: 400 });
         }
 
-        const ai = new GoogleGenAI({ apiKey });
+        const provider = getAIProvider();
         const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
         // Build the user message — include bounding box hint if provided
@@ -30,34 +24,23 @@ export async function POST(req: Request) {
             userText = `Focus on the chessboard in region [ymin=${ymin}, xmin=${xmin}, ymax=${ymax}, xmax=${xmax}] (scaled 0-1000). Output only that board's FEN.`;
         }
 
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { inlineData: { data: cleanBase64, mimeType } },
-                        { text: userText }
-                    ]
-                }
-            ],
-            config: {
-                systemInstruction: parseBoardPrompt,
-                temperature: 0.1,
-            }
+        const responseText = await provider.generate({
+            systemPrompt: parseBoardPrompt,
+            userText,
+            image: { base64: cleanBase64, mimeType },
+            temperature: 0.1,
         });
 
-        const responseText = (response.text || "").trim();
+        const trimmed = (responseText || "").trim();
 
         // Extract FEN from the plain-text response
-        // The response should be just a FEN string, but handle edge cases
-        const fen = extractFen(responseText);
+        const fen = extractFen(trimmed);
 
         if (fen) {
             return NextResponse.json({ fen });
         } else {
-            console.error("Could not extract FEN from response:", responseText);
-            return NextResponse.json({ error: "Failed to extract a valid FEN from the response.", rawText: responseText }, { status: 500 });
+            console.error("Could not extract FEN from response:", trimmed);
+            return NextResponse.json({ error: "Failed to extract a valid FEN from the response.", rawText: trimmed }, { status: 500 });
         }
 
     } catch (error: unknown) {

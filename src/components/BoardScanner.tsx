@@ -64,7 +64,7 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
             const { base64, mimeType } = await compressImage(file, 1024, 0.8);
             addLog(`Image compressed in ${Date.now() - startCompress}ms (${Math.round(base64.length / 1024)}KB)`);
 
-            addLog(`Calling /api/parse-board (model: ${settings.geminiModel})...`);
+            addLog(`Calling /api/parse-board...`);
             const startApi = Date.now();
             const res = await fetch('/api/parse-board', {
                 method: 'POST',
@@ -72,8 +72,6 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
                 body: JSON.stringify({
                     imageBase64: base64,
                     mimeType: mimeType,
-                    apiKey: settings.geminiApiKey,
-                    model: settings.geminiModel
                 })
             });
             addLog(`API responded in ${Date.now() - startApi}ms (status: ${res.status})`);
@@ -132,8 +130,6 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
                 body: JSON.stringify({
                     imageBase64: base64data,
                     mimeType: compressedMimeType,
-                    apiKey: settings.geminiApiKey,
-                    model: settings.geminiModel
                 })
             });
 
@@ -173,8 +169,6 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
                         body: JSON.stringify({
                             imageBase64: base64data,
                             mimeType: compressedMimeType,
-                            apiKey: settings.geminiApiKey,
-                            model: settings.geminiModel,
                             boardHint: board.box,
                         })
                     });

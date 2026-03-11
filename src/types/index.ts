@@ -1,8 +1,6 @@
 // Centralized type definitions for the Chess Notation app
 
 export type AppSettings = {
-    geminiApiKey: string;
-    geminiModel: string;
     fastMode: boolean;
     stockfishDepth: number;
     stockfishEnabled: boolean;
@@ -10,8 +8,6 @@ export type AppSettings = {
 };
 
 export const defaultSettings: AppSettings = {
-    geminiApiKey: "",
-    geminiModel: "gemini-3-flash-preview",
     fastMode: false,
     stockfishDepth: 10,
     stockfishEnabled: true,

@@ -124,28 +124,7 @@ export default function Home() {
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
               {/* AI Settings */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">AI Model Settings</h3>
-
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300 font-medium">Gemini API Key (Optional Override)</label>
-                  <input
-                    type="password"
-                    value={settings.geminiApiKey}
-                    onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
-                    placeholder="Defaults to server environment variable"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300 font-medium">Model Name</label>
-                  <input
-                    type="text"
-                    value={settings.geminiModel}
-                    onChange={(e) => updateSettings({ geminiModel: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
+                <h3 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">AI Settings</h3>
 
                 <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-700 rounded-md mt-2">
                   <div>
