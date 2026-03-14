@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAIProvider } from '@/lib/ai-provider';
-import { parseBoardPrompt } from '@/prompts/parseBoard';
+import { parseBoardPrompt, parseBoardSchema } from '@/prompts/parseBoard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,12 +29,13 @@ export async function POST(req: Request) {
             userText,
             image: { base64: cleanBase64, mimeType },
             temperature: 0.1,
+            jsonSchema: parseBoardSchema,
         });
 
         const trimmed = (responseText || "").trim();
 
-        // Extract FEN from the plain-text response
-        const fen = extractFen(trimmed);
+        // Try structured JSON first (preferred path)
+        const fen = extractFenFromJson(trimmed) || extractFen(trimmed);
 
         if (fen) {
             return NextResponse.json({ fen });
@@ -54,7 +55,22 @@ export async function POST(req: Request) {
 }
 
 /**
- * Extract a FEN string from raw text.
+ * Extract FEN from a structured JSON response (preferred).
+ */
+function extractFenFromJson(text: string): string | null {
+    try {
+        const data = JSON.parse(text);
+        if (data.fen && typeof data.fen === 'string') {
+            return normalizeFen(data.fen.trim());
+        }
+    } catch {
+        // Not valid JSON — fall through to regex extraction
+    }
+    return null;
+}
+
+/**
+ * Extract a FEN string from raw text (fallback).
  * Handles cases where the model wraps it in backticks, quotes, or extra text.
  */
 function extractFen(text: string): string | null {
@@ -62,18 +78,33 @@ function extractFen(text: string): string | null {
     let cleaned = text.replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/g, '').trim());
     cleaned = cleaned.replace(/`/g, '').trim();
 
-    // Try to match a FEN pattern: pieces/pieces/... followed by side-to-move etc.
+    // Try to match a FEN pattern: pieces/pieces/... followed by optional side-to-move etc.
     const fenRegex = /([rnbqkpRNBQKP1-8]{1,8}\/){7}[rnbqkpRNBQKP1-8]{1,8}(\s+[bw]\s+[KQkq-]+\s+[a-h1-8-]+\s+\d+\s+\d+)?/;
     const match = cleaned.match(fenRegex);
 
     if (match) {
-        let fen = match[0].trim();
-        // If missing the trailing parts (side to move, castling, etc.), append defaults
-        if (!fen.includes(' ')) {
-            fen += ' w - - 0 1';
-        }
-        return fen;
+        return normalizeFen(match[0].trim());
     }
 
     return null;
+}
+
+/**
+ * Ensure a FEN string has all six fields.
+ * Preserves whatever side-to-move the AI detected instead of always defaulting to white.
+ */
+function normalizeFen(fen: string): string {
+    const parts = fen.split(/\s+/);
+    // parts[0] = piece placement (required)
+    // parts[1] = side to move
+    // parts[2] = castling
+    // parts[3] = en passant
+    // parts[4] = halfmove clock
+    // parts[5] = fullmove number
+    if (parts.length < 2) parts.push('w');
+    if (parts.length < 3) parts.push('-');
+    if (parts.length < 4) parts.push('-');
+    if (parts.length < 5) parts.push('0');
+    if (parts.length < 6) parts.push('1');
+    return parts.slice(0, 6).join(' ');
 }

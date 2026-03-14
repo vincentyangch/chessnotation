@@ -61,7 +61,7 @@ export default function BoardScanner({ settings }: { settings: AppSettings }) {
             // Compress image before sending (e.g., 8MB → 200KB)
             addLog("Compressing image...");
             const startCompress = Date.now();
-            const { base64, mimeType } = await compressImage(file, 1024, 0.8);
+            const { base64, mimeType } = await compressImage(file, 1536, 0.85);
             addLog(`Image compressed in ${Date.now() - startCompress}ms (${Math.round(base64.length / 1024)}KB)`);
 
             addLog(`Calling /api/parse-board...`);
